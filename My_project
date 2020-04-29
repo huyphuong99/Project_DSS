@@ -1,0 +1,171 @@
+import pandas as pd
+import random
+import math
+from dateutil.parser import parse
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
+def TienXuLy():
+    # Tiền xử lý
+    data = pd.read_csv("/home/huyphuong99/Documents/data_set1.csv")
+    data = data[data["Customer ID"].notnull()]
+    data = data.drop(index = data[data['Invoice'].astype(str).str[0] == 'C'].index)
+
+    # chuan hoa sang ngay
+    date_time = []
+    X = data.values  # mảng numpy X lưu gía trị của file data.csv
+    for i in range(len(X[:, 4])):
+        date = parse(X[i, 4])
+        date_time.append(date)
+
+    # Tim ngay max
+    max_date = date_time[0]
+    for i in range(len(date_time)):
+        if (max_date < date_time[i]):
+            max_date = date_time[i]
+
+    for i in range(len(date_time)):
+        date_time[i] = max_date - date_time[i]
+
+    data["Inv_Day"] = date_time
+    data["Inv_Day"] = data["Inv_Day"].astype("timedelta64[D]")
+    data["Total_Bill"] = data.Quantity * data.Price
+    RFM = data.groupby("Customer ID", as_index = False).agg({"Inv_Day": "min", "Invoice": "count", "Total_Bill": "sum"})
+    RFM.rename(columns = {"Inv_Day": "Recency", "Invoice": "Frequency", "Total_Bill": "Mometary"}, inplace = True)
+
+    r = RFM["Recency"].tolist()
+    f = RFM["Frequency"].tolist()
+    m = RFM["Mometary"].tolist()
+
+    R = []
+    F = []
+    M = []
+    for i in range(len(m)):
+        t1 = -(r[i] - min(r)) / (max(r) - min(r))
+        R.append(t1)
+        t2 = (f[i] - min(f)) / (max(f) - min(f))
+        F.append(t2)
+        t3 = (m[i] - min(m)) / (max(m) - min(m))
+        M.append(t3)
+    ID = RFM["Customer ID"].tolist()
+    X = []
+    for i in range(len(ID)):
+        X.append([R[i],F[i],M[i]])
+    return X, R, F, M
+
+def eucldist(p0, p1):
+    dist = 0.0
+    for i in range(len(p0)):
+        dist += (p0[i] - p1[i]) ** 2
+    return math.sqrt(dist)
+
+def kmeans(k, datapoints):
+    d = len(datapoints[0])
+    i = 0
+    cluster = [0] * len(datapoints)
+    prev_cluster = [-1] * len(datapoints)
+
+    cluster_centers = []
+    for i in range(k):
+        cluster_centers += [datapoints[i]]
+
+    while cluster != prev_cluster:
+        prev_cluster = list(cluster)
+        i += 1
+
+        for p in range(len(datapoints)):
+            min_dist = float("inf")
+            for c in range(len(cluster_centers)):
+                dist = eucldist(datapoints[p], cluster_centers[c])
+                if (dist < min_dist):
+                    min_dist = dist
+                    cluster[p] = c
+
+        for k in range(len(cluster_centers)):
+            new_center = [0] * d
+            members = 0
+            for p in range(len(datapoints)):
+                if cluster[p] == k:
+                    for j in range(d):
+                        new_center[j] += datapoints[p][j]
+                    members += 1
+            for j in range(d):
+                if members != 0:
+                    new_center[j] = new_center[j] / members
+
+                else:
+                    new_center = random.choice(datapoints)
+            cluster_centers[k] = new_center
+
+    #print("Clusters", cluster_centers)
+    #print("Iterations", i)
+    #print("Assignments", cluster)
+    return cluster_centers, cluster
+
+
+
+if __name__ == "__main__":
+    datapoints, X, Y, Z = TienXuLy()
+    # K - Number of Clusters
+    '''sse = []
+    K = range(1,16)
+    for k in K:
+        lable, cluster = kmeans(k, datapoints)
+        W = 0
+        for i in range(k):
+            w = 0
+            for j in range(len(cluster)):
+                if i == cluster[j]:
+                    dist_ct = eucldist(lable[i], datapoints[j])
+                    w += dist_ct
+            W += w
+        print(k)
+        print(W)
+        sse.append(W)
+    plt.plot(K, sse, 'bo-')
+    plt.xlabel('\nValues of K\n')
+    plt.ylabel('Distortion')
+    plt.title('\nThe Elbow Method using Distortion\n')
+    plt.show()
+    print("\n")'''
+
+    k = 4
+    labelM, clusterM = kmeans(k, datapoints)
+    print(labelM)
+    print(len(clusterM))
+    '''fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(X, Y, Z, marker=".", c = clusterM, s = 40, cmap = "cubehelix")
+    ax.set_xlabel('Recency')
+    ax.set_ylabel('Frecency')
+    ax.set_zlabel('Mometary')
+    plt.show()'''
+
+
+    count = [0] * k
+    Total_M = [0] * k
+    Total = 0
+    for i in range(len(clusterM)):
+        if(clusterM[i] == 0):
+            count[0] += 1
+            Total_M[0] += Z[i]
+        elif(clusterM[i] == 1):
+            count[1] += 1
+            Total_M[1] += Z[i]
+        elif(clusterM[i] == 2):
+            count[2] += 1
+            Total_M[2] += Z[i]
+        else:
+            count[3] += 1
+            Total_M[3] += Z[i]
+        Total += Z[i]
+    for i in range(k):
+        count[i] /= len(clusterM)
+        count[i] = round(count[i],2)
+        Total_M[i] /= Total
+        Total_M[i]  = round(Total_M[i], 2)
+    print("Tỉ trọng khách hàng trong mỗi phân cụm: ", count[0]," ", count[1]," ", count[2]," ", count[3])
+    print("Tỉ trọng tổng giá trị hóa đơn của khách hàng trong mỗi phân cụm: ",Total_M[0]," ",Total_M[1]," ",Total_M[2]," ",Total_M[3])
+
+
